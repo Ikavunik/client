@@ -605,6 +605,17 @@ QMap<QByteArray, QByteArray> PropagateUploadFileCommon::headers()
         //  csync_owncloud.c's owncloud_file_id always strips the quotes.
         headers["If-Match"] = '"' + _item->_etag + '"';
     }
+
+    // Set up a conflict file header pointing to the original file
+    if (propagator()->account()->capabilities().uploadConflictFiles()
+        && Utility::isConflictFile(_item->_file.toUtf8().data(), true)) {
+        auto baseFile = Utility::conflictFileBaseName(_item->_file.toUtf8());
+        if (baseFile.isEmpty())
+            qWarning() << "ERROR: No base name!";
+        // ### what if the base file doesn't exist?
+        headers["OC-ConflictFileFor"] = baseFile;
+    }
+
     return headers;
 }
 

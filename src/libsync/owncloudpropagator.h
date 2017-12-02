@@ -214,10 +214,7 @@ public:
         qDeleteAll(_runningJobs);
     }
 
-    void appendJob(PropagatorJob *job)
-    {
-        _jobsToDo.append(job);
-    }
+    void appendJob(PropagatorJob *job);
     void appendTask(const SyncFileItemPtr &item)
     {
         _tasksToDo.append(item);
@@ -439,7 +436,10 @@ public:
 
     QString getFilePath(const QString &tmp_file_name) const;
 
+    /** Creates the job for an item.
+     */
     PropagateItemJob *createJob(const SyncFileItemPtr &item);
+
     void scheduleNextJob();
     void reportProgress(const SyncFileItem &, quint64 bytes);
 

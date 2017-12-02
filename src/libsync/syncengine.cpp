@@ -478,7 +478,7 @@ int SyncEngine::treewalkFile(csync_file_stat_t *file, csync_file_stat_t *other, 
         break;
     case CSYNC_STATUS_INDIVIDUAL_IS_CONFLICT_FILE:
         item->_status = SyncFileItem::Conflict;
-        if (Utility::shouldUploadConflictFiles()) {
+        if (account()->capabilities().uploadConflictFiles()) {
             // For uploaded conflict files, files with no action performed on them should
             // be displayed: but we mustn't overwrite the instruction if something happens
             // to the file!
@@ -559,7 +559,7 @@ int SyncEngine::treewalkFile(csync_file_stat_t *file, csync_file_stat_t *other, 
             _hasNoneFiles = true;
         }
         // Put none-instruction conflict files into the syncfileitem list
-        if (Utility::shouldUploadConflictFiles()
+        if (account()->capabilities().uploadConflictFiles()
             && file->error_status == CSYNC_STATUS_INDIVIDUAL_IS_CONFLICT_FILE
             && item->_instruction == CSYNC_INSTRUCTION_IGNORE) {
             break;
@@ -811,6 +811,8 @@ void SyncEngine::startSync()
         return;
         // database creation error!
     }
+
+    _csync_ctx->upload_conflict_files = _account->capabilities().uploadConflictFiles();
 
     _csync_ctx->read_remote_from_db = true;
     _lastLocalDiscoveryStyle = _csync_ctx->local_discovery_style;

@@ -520,6 +520,11 @@ void PropagateDownloadFile::setDeleteExistingFolder(bool enabled)
     _deleteExisting = enabled;
 }
 
+void PropagateDownloadFile::setCompositeParent(PropagatorCompositeJob *composite)
+{
+    _compositeParent = composite;
+}
+
 const char owncloudCustomSoftErrorStringC[] = "owncloud-custom-soft-error-string";
 void PropagateDownloadFile::slotGetFinished()
 {
@@ -677,7 +682,7 @@ void PropagateDownloadFile::deleteExistingFolder()
         // on error, just try to move it away...
     }
 
-    QString conflictDir = FileSystem::makeConflictFileName(
+    QString conflictDir = Utility::makeConflictFileName(
         existingDir, Utility::qDateTimeFromTime_t(FileSystem::getModTime(existingDir)));
 
     emit propagator()->touchedFile(existingDir);
@@ -805,9 +810,11 @@ void PropagateDownloadFile::downloadFinished()
         && !FileSystem::fileEquals(fn, _tmpFile.fileName());
     if (isConflict) {
         QString renameError;
-        QString conflictFileName = FileSystem::makeConflictFileName(
-            fn, Utility::qDateTimeFromTime_t(FileSystem::getModTime(fn)));
-        if (!FileSystem::rename(fn, conflictFileName, &renameError)) {
+        auto conflictModTime = FileSystem::getModTime(fn);
+        QString conflictFileName = Utility::makeConflictFileName(
+            _item->_file, Utility::qDateTimeFromTime_t(conflictModTime));
+        QString conflictFilePath = propagator()->getFilePath(conflictFileName);
+        if (!FileSystem::rename(fn, conflictFilePath, &renameError)) {
             // If the rename fails, don't replace it.
 
             // If the file is locked, we want to retry this sync when it
@@ -820,6 +827,22 @@ void PropagateDownloadFile::downloadFinished()
             return;
         }
         qCInfo(lcPropagateDownload) << "Created conflict file" << fn << "->" << conflictFileName;
+
+        // Create a new upload job if the new conflict file should be uploaded
+        if (propagator()->account()->capabilities().uploadConflictFiles()) {
+            SyncFileItemPtr conflictItem = SyncFileItemPtr(new SyncFileItem);
+            conflictItem->_file = conflictFileName;
+            conflictItem->_type = SyncFileItem::File;
+            conflictItem->_direction = SyncFileItem::Up;
+            conflictItem->_instruction = CSYNC_INSTRUCTION_NEW;
+            conflictItem->_modtime = conflictModTime;
+            conflictItem->_size = _item->_previousSize;
+            if (_compositeParent) {
+                _compositeParent->appendTask(conflictItem);
+            } else {
+                qWarning() << "ZZZ null composite parent!";
+            }
+        }
     }
 
     FileSystem::setModTime(_tmpFile.fileName(), _item->_modtime);

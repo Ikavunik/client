@@ -328,8 +328,10 @@ static CSYNC_EXCLUDE_TYPE _csync_excluded_common(c_strlist_t *excludes, const ch
         goto out;
     }
 
-    if (!OCC::Utility::shouldUploadConflictFiles()) {
-        if (OCC::Utility::isConflictFile(bname)) {
+    // ### maybe conflict files shouldn't accidentally be pattern matched?
+    // I guess they have to be, or we might upload a conflict file for an excluded base file?
+    if (false /* not upload conflict files */) {
+        if (OCC::Utility::isConflictFile(bname, false)) {
             match = CSYNC_FILE_EXCLUDE_CONFLICT;
             goto out;
         }

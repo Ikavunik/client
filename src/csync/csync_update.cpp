@@ -387,8 +387,8 @@ out:
 
   // If conflict files are uploaded, they won't be marked as IGNORE / CSYNC_FILE_EXCLUDE_CONFLICT
   // but we still want them marked!
-  if (OCC::Utility::shouldUploadConflictFiles()) {
-      if (OCC::Utility::isConflictFile(fs->path.constData())) {
+  if (ctx->upload_conflict_files) {
+      if (OCC::Utility::isConflictFile(fs->path.constData(), true)) {
           fs->error_status = CSYNC_STATUS_INDIVIDUAL_IS_CONFLICT_FILE;
       }
   }

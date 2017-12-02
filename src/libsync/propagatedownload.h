@@ -174,6 +174,10 @@ public:
      */
     void setDeleteExistingFolder(bool enabled);
 
+    /** If we create an upload job for a conflict file, add it here
+     */
+    void setCompositeParent(PropagatorCompositeJob *composite);
+
 private slots:
     /// Called when ComputeChecksum on the local file finishes,
     /// maybe the local and remote checksums are identical?
@@ -202,6 +206,7 @@ private:
     QPointer<GETFileJob> _job;
     QFile _tmpFile;
     bool _deleteExisting;
+    PropagatorCompositeJob *_compositeParent = nullptr;
 
     QElapsedTimer _stopwatch;
 };

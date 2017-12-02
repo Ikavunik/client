@@ -753,6 +753,15 @@ void PropagatorCompositeJob::slotSubJobAbortFinished()
     }
 }
 
+void PropagatorCompositeJob::appendJob(PropagatorJob *job)
+{
+    // Some jobs need to know about their parent
+    if (auto download = qobject_cast<PropagateDownloadFile *>(job))
+        download->setCompositeParent(this);
+
+    _jobsToDo.append(job);
+}
+
 bool PropagatorCompositeJob::scheduleSelfOrChild()
 {
     if (_state == Finished) {
@@ -781,13 +790,8 @@ bool PropagatorCompositeJob::scheduleSelfOrChild()
     }
 
     // Now it's our turn, check if we have something left to do.
-    if (!_jobsToDo.isEmpty()) {
-        PropagatorJob *nextJob = _jobsToDo.first();
-        _jobsToDo.remove(0);
-        _runningJobs.append(nextJob);
-        return possiblyRunNextJob(nextJob);
-    }
-    while (!_tasksToDo.isEmpty()) {
+    // First, convert a task to a job if necessary
+    while (_jobsToDo.isEmpty() && !_tasksToDo.isEmpty()) {
         SyncFileItemPtr nextTask = _tasksToDo.first();
         _tasksToDo.remove(0);
         PropagatorJob *job = propagator()->createJob(nextTask);
@@ -795,9 +799,15 @@ bool PropagatorCompositeJob::scheduleSelfOrChild()
             qCWarning(lcDirectory) << "Useless task found for file" << nextTask->destination() << "instruction" << nextTask->_instruction;
             continue;
         }
-
-        _runningJobs.append(job);
-        return possiblyRunNextJob(job);
+        appendJob(job);
+        break;
+    }
+    // Then run the next job
+    if (!_jobsToDo.isEmpty()) {
+        PropagatorJob *nextJob = _jobsToDo.first();
+        _jobsToDo.remove(0);
+        _runningJobs.append(nextJob);
+        return possiblyRunNextJob(nextJob);
     }
 
     // If neither us or our children had stuff left to do we could hang. Make sure

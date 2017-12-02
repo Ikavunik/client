@@ -546,7 +546,28 @@ QUrl Utility::concatUrlPath(const QUrl &url, const QString &concatPath,
     return tmpUrl;
 }
 
-bool Utility::isConflictFile(const char *name)
+QString Utility::makeConflictFileName(const QString &fn, const QDateTime &dt)
+{
+    QString conflictFileName(fn);
+    // Add _conflict-XXXX  before the extension.
+    int dotLocation = conflictFileName.lastIndexOf('.');
+    // If no extension, add it at the end  (take care of cases like foo/.hidden or foo.bar/file)
+    if (dotLocation <= conflictFileName.lastIndexOf('/') + 1) {
+        dotLocation = conflictFileName.size();
+    }
+    QString timeString = dt.toString("yyyyMMdd-hhmmss");
+
+    // Additional marker
+    QByteArray conflictFileUserName = qgetenv("CSYNC_CONFLICT_FILE_USERNAME");
+    if (conflictFileUserName.isEmpty())
+        conflictFileName.insert(dotLocation, "_conflict-" + timeString);
+    else
+        conflictFileName.insert(dotLocation, "_conflict_" + QString::fromUtf8(conflictFileUserName) + "-" + timeString);
+
+    return conflictFileName;
+}
+
+bool Utility::isConflictFile(const char *name, bool uploadConflictFiles)
 {
     const char *bname = std::strrchr(name, '/');
     if (bname) {
@@ -558,7 +579,7 @@ bool Utility::isConflictFile(const char *name)
     if (std::strstr(bname, "_conflict-"))
         return true;
 
-    if (shouldUploadConflictFiles()) {
+    if (uploadConflictFiles) {
         // For uploads, we want to consider files with any kind of username tag
         // as conflict files. (pattern *_conflict_*-)
         const char *startOfMarker = std::strstr(bname, "_conflict_");
@@ -577,10 +598,28 @@ bool Utility::isConflictFile(const char *name)
     return false;
 }
 
-bool Utility::shouldUploadConflictFiles()
+QByteArray Utility::conflictFileBaseName(const QByteArray &conflictName)
 {
-    static bool uploadConflictFiles = qEnvironmentVariableIntValue("OWNCLOUD_UPLOAD_CONFLICT_FILES") != 0;
-    return uploadConflictFiles;
+    int from = conflictName.size();
+    while (from != -1) {
+        auto start = conflictName.lastIndexOf("_conflict", from);
+        if (start == -1)
+            return "";
+        from = start - 1;
+
+        // Check for "_conflict-" or "_conflict_"
+        if (start + 9 >= conflictName.size())
+            continue;
+        auto afterConflictChar = conflictName[start + 9];
+        if (afterConflictChar != '_' && afterConflictChar != '-')
+            continue;
+
+        auto end = conflictName.indexOf('.', start);
+        if (end == -1)
+            end = conflictName.size();
+        return conflictName.left(start) + conflictName.mid(end);
+    }
+    return "";
 }
 
 } // namespace OCC
