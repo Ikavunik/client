@@ -110,6 +110,17 @@ public:
 
     bool isValid() const;
 };
+
+class OCSYNC_EXPORT ConflictRecord
+{
+public:
+    QByteArray path;
+    QByteArray basePath;
+    qint64 baseModtime = 0;
+    QByteArray baseEtag;
+
+    bool isValid() const { return !path.isEmpty(); }
+};
 }
 
 #endif // SYNCJOURNALFILERECORD_H

@@ -437,12 +437,23 @@ bool SyncJournalDb::checkConnect()
         return sqlFail("Create table version", createQuery);
     }
 
-    // create the checksumtype table.
+    // create the datafingerprint table.
     createQuery.prepare("CREATE TABLE IF NOT EXISTS datafingerprint("
                         "fingerprint TEXT UNIQUE"
                         ");");
     if (!createQuery.exec()) {
         return sqlFail("Create table datafingerprint", createQuery);
+    }
+
+    // create the conflicts table.
+    createQuery.prepare("CREATE TABLE IF NOT EXISTS conflicts("
+                        "path TEXT PRIMARY KEY,"
+                        "basePath TEXT,"
+                        "baseEtag TEXT,"
+                        "baseModtime INTEGER"
+                        ");");
+    if (!createQuery.exec()) {
+        return sqlFail("Create table conflicts", createQuery);
     }
 
     createQuery.prepare("CREATE TABLE IF NOT EXISTS version("
@@ -692,6 +703,23 @@ bool SyncJournalDb::checkConnect()
         return sqlFail("prepare _setDataFingerprintQuery2", *_setDataFingerprintQuery2);
     }
 
+    _getConflictRecordQuery.reset(new SqlQuery(_db));
+    if (_getConflictRecordQuery->prepare("SELECT basePath, baseModtime, baseEtag FROM conflicts WHERE path=?1;")) {
+        return sqlFail("prepare _getConflictRecordQuery", *_getConflictRecordQuery);
+    }
+
+    _setConflictRecordQuery.reset(new SqlQuery(_db));
+    if (_setConflictRecordQuery->prepare("INSERT OR REPLACE INTO conflicts "
+                                         "(path, basePath, baseModtime, baseEtag) "
+                                         "VALUES (?1, ?2, ?3, ?4);")) {
+        return sqlFail("prepare _setConflictRecordQuery", *_setConflictRecordQuery);
+    }
+
+    _deleteConflictRecordQuery.reset(new SqlQuery(_db));
+    if (_deleteConflictRecordQuery->prepare("DELETE FROM conflicts WHERE path=?1;")) {
+        return sqlFail("prepare _deleteConflictRecordQuery", *_deleteConflictRecordQuery);
+    }
+
     // don't start a new transaction now
     commitInternal(QString("checkConnect End"), false);
 
@@ -740,6 +768,9 @@ void SyncJournalDb::close()
     _getDataFingerprintQuery.reset(0);
     _setDataFingerprintQuery1.reset(0);
     _setDataFingerprintQuery2.reset(0);
+    _getConflictRecordQuery.reset(0);
+    _setConflictRecordQuery.reset(0);
+    _deleteConflictRecordQuery.reset(0);
 
     _db.close();
     _avoidReadFromDbOnNextSyncFilter.clear();
@@ -1936,6 +1967,57 @@ void SyncJournalDb::setDataFingerprint(const QByteArray &dataFingerprint)
     _setDataFingerprintQuery2->reset_and_clear_bindings();
     _setDataFingerprintQuery2->bindValue(1, dataFingerprint);
     _setDataFingerprintQuery2->exec();
+}
+
+void SyncJournalDb::setConflictRecord(const ConflictRecord &record)
+{
+    QMutexLocker locker(&_mutex);
+    if (!checkConnect())
+        return;
+
+    auto &query = *_setConflictRecordQuery;
+    query.reset_and_clear_bindings();
+    query.bindValue(1, record.path);
+    query.bindValue(2, record.basePath);
+    query.bindValue(3, record.baseModtime);
+    query.bindValue(4, record.baseEtag);
+    query.exec();
+    // ### error handling for all of these?!
+}
+
+ConflictRecord SyncJournalDb::conflictRecord(const QByteArray &path)
+{
+    ConflictRecord entry;
+
+    QMutexLocker locker(&_mutex);
+    if (!checkConnect())
+        return entry;
+
+    auto &query = *_getConflictRecordQuery;
+    query.reset_and_clear_bindings();
+    query.bindValue(1, path);
+    if (!query.exec())
+        return entry;
+    if (!query.next())
+        return entry;
+
+    entry.path = path;
+    entry.basePath = query.baValue(0);
+    entry.baseModtime = query.int64Value(1);
+    entry.baseEtag = query.baValue(2);
+    return entry;
+}
+
+void SyncJournalDb::deleteConflictRecord(const QByteArray &path)
+{
+    QMutexLocker locker(&_mutex);
+    if (!checkConnect())
+        return;
+
+    auto &query = *_deleteConflictRecordQuery;
+    query.reset_and_clear_bindings();
+    query.bindValue(1, path);
+    query.exec();
 }
 
 void SyncJournalDb::clearFileTable()

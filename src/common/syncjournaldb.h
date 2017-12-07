@@ -206,6 +206,10 @@ public:
     void setDataFingerprint(const QByteArray &dataFingerprint);
     QByteArray dataFingerprint();
 
+    void setConflictRecord(const ConflictRecord &record);
+    ConflictRecord conflictRecord(const QByteArray &path);
+    void deleteConflictRecord(const QByteArray &path);
+
     /**
      * Delete any file entry. This will force the next sync to re-sync everything as if it was new,
      * restoring everyfile on every remote. If a file is there both on the client and server side,
@@ -265,6 +269,9 @@ private:
     QScopedPointer<SqlQuery> _getDataFingerprintQuery;
     QScopedPointer<SqlQuery> _setDataFingerprintQuery1;
     QScopedPointer<SqlQuery> _setDataFingerprintQuery2;
+    QScopedPointer<SqlQuery> _getConflictRecordQuery;
+    QScopedPointer<SqlQuery> _setConflictRecordQuery;
+    QScopedPointer<SqlQuery> _deleteConflictRecordQuery;
 
     /* This is the list of paths we called avoidReadFromDbOnNextSync on.
      * It means that they should not be written to the DB in any case since doing
