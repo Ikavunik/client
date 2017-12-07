@@ -94,7 +94,7 @@ private slots:
         QMap<QByteArray, QString> conflictMap;
         fakeFolder.setServerOverride([&](QNetworkAccessManager::Operation op, const QNetworkRequest &request) -> QNetworkReply * {
             if (op == QNetworkAccessManager::PutOperation) {
-                auto baseFile = request.rawHeader("OC-ConflictFileFor");
+                auto baseFile = request.rawHeader("OC-ConflictBasePath");
                 if (!baseFile.isEmpty()) {
                     auto components = request.url().toString().split('/');
                     QString conflictFile = components.mid(components.size() - 2).join('/');
@@ -135,7 +135,7 @@ private slots:
         QMap<QByteArray, QString> conflictMap;
         fakeFolder.setServerOverride([&](QNetworkAccessManager::Operation op, const QNetworkRequest &request) -> QNetworkReply * {
             if (op == QNetworkAccessManager::PutOperation) {
-                auto baseFile = request.rawHeader("OC-ConflictFileFor");
+                auto baseFile = request.rawHeader("OC-ConflictBasePath");
                 if (!baseFile.isEmpty()) {
                     auto components = request.url().toString().split('/');
                     QString conflictFile = components.mid(components.size() - 2).join('/');
@@ -147,7 +147,12 @@ private slots:
 
         // Explicitly add a conflict file to simulate the case where the upload of the
         // file didn't finish in the same sync run that the conflict was created.
+        // To do that we need to create a mock conflict record.
         fakeFolder.localModifier().insert("A/a1_conflict_me-1234", 64, 'L');
+        ConflictRecord conflictRecord;
+        conflictRecord.path = "A/a1_conflict_me-1234";
+        conflictRecord.basePath = "A/a1";
+        fakeFolder.syncJournal().setConflictRecord(conflictRecord);
         QVERIFY(fakeFolder.syncOnce());
         QCOMPARE(fakeFolder.currentLocalState(), fakeFolder.currentRemoteState());
         QCOMPARE(conflictMap.size(), 1);
@@ -181,6 +186,43 @@ private slots:
         QCOMPARE(fakeFolder.currentRemoteState().find("A/a1_conflict_me-1234")->size, 66);
         QCOMPARE(fakeFolder.currentRemoteState().find(conflictMap["A/a1_conflict_me-1234"])->size, 65);
         conflictMap.clear();
+    }
+
+    // What happens if we download a conflict file? Is the metadata set up correctly?
+    void testDownloadingConflictFile()
+    {
+        FakeFolder fakeFolder{ FileInfo::A12_B12_C12_S12() };
+        fakeFolder.syncEngine().account()->setCapabilities({ { "uploadConflictFiles", true } });
+        QCOMPARE(fakeFolder.currentLocalState(), fakeFolder.currentRemoteState());
+
+        // With no headers from the server
+        fakeFolder.remoteModifier().insert("A/a1_conflict-1234");
+        QVERIFY(fakeFolder.syncOnce());
+        QCOMPARE(fakeFolder.currentLocalState(), fakeFolder.currentRemoteState());
+        auto conflictRecord = fakeFolder.syncJournal().conflictRecord("A/a1_conflict-1234");
+        QVERIFY(conflictRecord.isValid());
+        QCOMPARE(conflictRecord.basePath, QByteArray("A/a1"));
+
+        // Now with server headers
+        QObject parent;
+        fakeFolder.setServerOverride([&](QNetworkAccessManager::Operation op, const QNetworkRequest &request) -> QNetworkReply * {
+            if (op == QNetworkAccessManager::GetOperation) {
+                auto reply = new FakeGetReply(fakeFolder.remoteModifier(), op, request, &parent);
+                reply->setRawHeader("OC-ConflictBasePath", "A/a2");
+                reply->setRawHeader("OC-ConflictBaseMtime", "1234");
+                reply->setRawHeader("OC-ConflictBaseEtag", "etag");
+                return reply;
+            }
+            return nullptr;
+        });
+        fakeFolder.remoteModifier().insert("A/really-a-conflict"); // doesn't look like a conflict, but headers say it is
+        QVERIFY(fakeFolder.syncOnce());
+        QCOMPARE(fakeFolder.currentLocalState(), fakeFolder.currentRemoteState());
+        conflictRecord = fakeFolder.syncJournal().conflictRecord("A/really-a-conflict");
+        QVERIFY(conflictRecord.isValid());
+        QCOMPARE(conflictRecord.basePath, QByteArray("A/a2"));
+        QCOMPARE(conflictRecord.baseModtime, 1234);
+        QCOMPARE(conflictRecord.baseEtag, QByteArray("etag"));
     }
 
     void testConflictFileBaseName_data()

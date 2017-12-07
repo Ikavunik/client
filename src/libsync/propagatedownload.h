@@ -207,6 +207,7 @@ private:
     QFile _tmpFile;
     bool _deleteExisting;
     PropagatorCompositeJob *_compositeParent = nullptr;
+    ConflictRecord _conflictRecord;
 
     QElapsedTimer _stopwatch;
 };

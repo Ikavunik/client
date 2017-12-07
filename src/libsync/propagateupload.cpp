@@ -609,11 +609,19 @@ QMap<QByteArray, QByteArray> PropagateUploadFileCommon::headers()
     // Set up a conflict file header pointing to the original file
     if (propagator()->account()->capabilities().uploadConflictFiles()
         && Utility::isConflictFile(_item->_file.toUtf8().data(), true)) {
-        auto baseFile = Utility::conflictFileBaseName(_item->_file.toUtf8());
-        if (baseFile.isEmpty())
-            qWarning() << "ERROR: No base name!";
-        // ### what if the base file doesn't exist?
-        headers["OC-ConflictFileFor"] = baseFile;
+        // ### What if the base file no longer exists?
+        auto conflictRecord = propagator()->_journal->conflictRecord(_item->_file.toUtf8());
+        if (conflictRecord.isValid()) {
+            headers["OC-ConflictBasePath"] = conflictRecord.basePath;
+            headers["OC-ConflictBaseMtime"] = QByteArray::number(conflictRecord.baseModtime);
+            headers["OC-ConflictBaseEtag"] = conflictRecord.baseEtag;
+        } else {
+            // ### Should we do anything without a conflict record?! I don't think so.
+            //     But on downloading a conflict file, we should create a conflict record!
+//            auto baseFile = Utility::conflictFileBaseName(_item->_file.toUtf8());
+//            if (baseFile.isEmpty())
+//                qWarning() << "ERROR: No base name!";
+        }
     }
 
     return headers;
