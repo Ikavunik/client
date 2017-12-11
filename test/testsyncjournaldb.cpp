@@ -50,7 +50,7 @@ private slots:
         QVERIFY(!record.isValid());
 
         record._path = "foo";
-        record._inode = 1234;
+        record._inode = std::numeric_limits<quint64>::max() - 1234;
         record._modtime = dropMsecs(QDateTime::currentDateTime());
         record._type = 5;
         record._etag = "789789";
@@ -71,7 +71,7 @@ private slots:
         QVERIFY(storedRecord == record);
 
         // Update metadata
-        record._inode = 12345;
+        record._inode = std::numeric_limits<quint64>::max() - 12345;
         record._modtime = dropMsecs(QDateTime::currentDateTime().addDays(1));
         record._type = 7;
         record._etag = "789FFF";

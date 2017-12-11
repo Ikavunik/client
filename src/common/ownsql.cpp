@@ -342,9 +342,12 @@ void SqlQuery::bindValue(int pos, const QVariant &value)
     case QVariant::Double:
         res = sqlite3_bind_double(_stmt, pos, value.toDouble());
         break;
-    case QVariant::UInt:
     case QVariant::LongLong:
         res = sqlite3_bind_int64(_stmt, pos, value.toLongLong());
+        break;
+    case QVariant::UInt:
+    case QVariant::ULongLong:
+        res = sqlite3_bind_int64(_stmt, pos, value.toULongLong());
         break;
     case QVariant::DateTime: {
         const QDateTime dateTime = value.toDateTime();
